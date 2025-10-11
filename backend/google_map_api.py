@@ -48,8 +48,7 @@ def text_to_coords(place_text):
 
 
 # get route from origin to destination (in coords)
-def get_route(origin_coords, destination_coords, api_key):
-    """Get transit route between two coordinates."""
+def get_routes(origin_coords, destination_coords, departure_time):
     origin_str = f"{origin_coords[0]},{origin_coords[1]}"
     destination_str = f"{destination_coords[0]},{destination_coords[1]}"
 
@@ -57,69 +56,70 @@ def get_route(origin_coords, destination_coords, api_key):
     params = {
         "origin": origin_str,
         "destination": destination_str,
-        "mode": "transit",  # walk + bus/train
-        "key": api_key
+        "mode": "transit",
+        "alternatives": "true",
+        "key": GOOGLE_API_KEY
     }
+
+    if departure_time != "now":
+        params["departure_time"] = departure_time
 
     resp = requests.get(url, params=params)
     data = resp.json()
 
-    route_legs = []
-
-    try:
-        steps = data["routes"][0]["legs"][0]["steps"]
-    except (KeyError, IndexError):
-        print("No route found")
+    if "routes" not in data or not data["routes"]:
+        print("No routes found")
         return []
 
-    for step in steps:
-        travel_mode = step.get("travel_mode")
-        if travel_mode == "WALKING":
-            route_legs.append({
-                "mode": "WALK",
-                "start": step.get("start_location", {}),
-                "end": step.get("end_location", {}),
-                "duration": step.get("duration", {}).get("text", "")
-            })
-        elif travel_mode == "TRANSIT":
-            transit = step.get("transit_details", {})
-            line = transit.get("line", {})
-            vehicle = line.get("vehicle", {}).get("type", "TRANSIT")
-            line_name = line.get("short_name") or line.get("name") or "Unknown Line"
+    all_routes = []
 
-            departure = transit.get("departure_stop", {})
-            arrival = transit.get("arrival_stop", {})
+    # Loop through all route alternatives
+    for route in data["routes"]:
+        route_dict = {"legs": []}
 
-            dep_loc = departure.get("location", {})
-            arr_loc = arrival.get("location", {})
+        try:
+            steps = route["legs"][0]["steps"]
+        except (KeyError, IndexError):
+            continue
 
-            route_legs.append({
-                "mode": vehicle,
-                "line": line_name,
-                "departure_stop": departure.get("name", "Unknown"),
-                "arrival_stop": arrival.get("name", "Unknown"),
-                "duration": step.get("duration", {}).get("text", ""),
-                "departure_coords": (
-                    dep_loc.get("lat", 0),
-                    dep_loc.get("lng", 0)
-                ),
-                "arrival_coords": (
-                    arr_loc.get("lat", 0),
-                    arr_loc.get("lng", 0)
-                )
-            })
-    return route_legs
+        for step in steps:
+            travel_mode = step.get("travel_mode")
 
+            if travel_mode == "WALKING":
+                route_dict["legs"].append({
+                    "mode": "WALK",
+                    "start": step.get("start_location", {}),
+                    "end": step.get("end_location", {}),
+                    "duration": step.get("duration", {}).get("text", "")
+                })
 
-origin_coords = text_to_coords("Tampines MRT")
-destination_coords = text_to_coords("Kent Ridge MRT")
+            elif travel_mode == "TRANSIT":
+                transit = step.get("transit_details", {})
+                line = transit.get("line", {})
+                vehicle = line.get("vehicle", {}).get("type", "TRANSIT")
+                line_name = line.get("short_name") or line.get("name") or "Unknown Line"
 
-print(origin_coords)
-print(destination_coords)
+                departure = transit.get("departure_stop", {})
+                arrival = transit.get("arrival_stop", {})
+                dep_loc = departure.get("location", {})
+                arr_loc = arrival.get("location", {})
 
-# Get route
-legs = get_route(origin_coords, destination_coords, GOOGLE_API_KEY)
+                route_dict["legs"].append({
+                    "mode": vehicle,
+                    "line": line_name,
+                    "departure_stop": departure.get("name", "Unknown"),
+                    "arrival_stop": arrival.get("name", "Unknown"),
+                    "duration": step.get("duration", {}).get("text", ""),
+                    "departure_coords": (
+                        dep_loc.get("lat", 0),
+                        dep_loc.get("lng", 0)
+                    ),
+                    "arrival_coords": (
+                        arr_loc.get("lat", 0),
+                        arr_loc.get("lng", 0)
+                    )
+                })
 
-# Print results
-for i, leg in enumerate(legs, 1):
-    print(f"Leg {i}: {leg}")
+        all_routes.append(route_dict)
+
+    return all_routes
