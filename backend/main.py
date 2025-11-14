@@ -1,6 +1,6 @@
 # main.py
 from google_map_api import text_to_coords, get_routes
-from lta_data_api import get_mrt_station_code, load_bus_stops_with_tree, find_nearest_bus_stop_kdtree, get_bus_arrival, get_train_crowd_density_real_time, get_traffic_incidents
+from lta_data_api import get_mrt_station_code, load_bus_stops_with_tree, find_nearest_bus_stop_kdtree, get_bus_arrival, get_train_crowd_density_real_time, get_train_service_alerts, parse_datetime, get_train_platform_forecast
 import datetime
 
 def main():
@@ -35,7 +35,7 @@ def main():
                     bus_info = next((b for b in resp["Services"] if b["ServiceNo"] == leg["line"]), None)
                     if bus_info:
                         leg["next_buses"] = []
-                        for bus_key in ["NExtBus", "NextBus2", "NextBus3"]:
+                        for bus_key in ["NextBus", "NextBus2", "NextBus3"]:
                             next_bus = bus_info.get(bus_key)
                             if next_bus and next_bus.get("EstimatedArrival"):
                                 leg["next_buses"].append({
@@ -55,6 +55,11 @@ def main():
                         leg["departure_platform_crowd_level"] = get_train_crowd_density_real_time(leg["departure_mrt_code"])
                     if leg["arrival_mrt_code"]:
                         leg["arrival_platform_crowd_level"] = get_train_crowd_density_real_time(leg["arrival_mrt_code"])
+                    train_line_code = leg["line"] + "L"
+                    leg["train_service_alert"] = get_train_service_alerts(train_line_code)
+                else:
+                    leg["departure_platform_crowd_level_forecast"] = get_train_platform_forecast(leg["departure_mrt_code"], future_time_str)
+                    leg["arrival_platform_crowd_level_forecast"] = get_train_platform_forecast(leg["arrival_mrt_code"], future_time_str)
 
     for i, route in enumerate(routes):
         print(f"\n--- Route {i+1}: ---")
